@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nuestro Aniversario</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
         body { font-family: 'Space Mono', monospace; image-rendering: pixelated; }
         .pixel-border { box-shadow: 0 0 0 4px #8b3a3a, 0 0 0 8px #1a0a0e; }
-        canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+        canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #1a0a0e; }
         .dpad-btn { width: 48px; height: 48px; border: 3px solid #8b3a3a; background: #2a0f14; color: #f4c2c2; font-size: 20px; display: flex; align-items: center; justify-content: center; user-select: none; cursor: pointer; }
         .dpad-btn:active { background: #8b3a3a; }
         .modal-overlay { background: rgba(10,0,0,0.92); }
@@ -28,13 +28,180 @@
    <div class="pixel-border rounded">
     <canvas id="game" width="320" height="320"></canvas>
    </div>
-   <p class="text-sm text-center max-w-xs" style="color: rgb(232, 196, 196);">Mueve el corazón con las flechas y recoge todos los corazones ♥</p>
+   <p class="text-sm text-center max-w-xs" style="color: rgb(232, 196, 196);">Mueve el corazón con las flechas (o WASD) y recoge todas las rosas ♥</p>
    
    <div class="grid grid-cols-3 gap-1 md:hidden" id="dpad">
     <div></div><button class="dpad-btn rounded" data-dir="up">▲</button><div></div>
     <button class="dpad-btn rounded" data-dir="left">◄</button> <button class="dpad-btn rounded" data-dir="down">▼</button> <button class="dpad-btn rounded" data-dir="right">►</button>
    </div>
    
+   <p id="score-display" class="text-base font-bold" style="color: rgb(244, 194, 194);">♥ 0 / 8</p>
+  </main>
+
+  <div id="modal" class="modal-overlay fixed inset-0 flex items-center justify-center p-6 hidden z-50">
+   <div class="max-w-sm w-full p-6 rounded pixel-border text-center" style="background: rgb(42, 15, 20);">
+    <p id="modal-text" class="text-base leading-relaxed italic" style="color:#f4c2c2;"></p>
+    <button id="modal-close" class="mt-4 px-4 py-2 rounded font-bold" style="background: rgb(139, 58, 58); color: rgb(244, 194, 194);">Continuar ►</button>
+   </div>
+  </div>
+
+  <div id="final" class="modal-overlay fixed inset-0 flex items-center justify-center p-6 hidden z-50">
+   <div class="max-w-sm w-full p-6 rounded pixel-border text-center" style="background:#2a0f14;">
+    <p class="text-lg float-anim" style="color: rgb(244, 194, 194); font-style: italic;">Eternamente tuya, hasta el último suspiro ♥</p>
+   </div>
+  </div>
+
+  <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const TILE = 32;
+        const COLS = 10, ROWS = 10;
+
+        let player = { x: 4, y: 4 };
+        let collectibles = [
+            { x: 1, y: 1, collected: false, hasText: true, text: "Desde la primera vez que te vi, mi alma supo que te pertenecía por toda la eternidad. Eres la sombra que abraza mi corazón en la noche más profunda." },
+            { x: 8, y: 2, collected: false, hasText: true, text: "Me ahogo en tu mirada como en un mar de terciopelo negro. Cada beso tuyo es un conjuro que me ata a ti para siempre — sin escape, sin deseo de escapar." },
+            { x: 5, y: 8, collected: false, hasText: true, text: "Si el amor fuera veneno, bebería cada gota de tus labios sin dudar. Eres mi obsesión más dulce, mi condena más hermosa." },
+            { x: 2, y: 5, collected: false, hasText: false },
+            { x: 7, y: 6, collected: false, hasText: false },
+            { x: 3, y: 8, collected: false, hasText: false },
+            { x: 8, y: 4, collected: false, hasText: false },
+            { x: 1, y: 7, collected: false, hasText: false }
+        ];
+        
+        let collected = 0;
+
+        function drawPixelHeart(cx, cy, size, color) {
+            ctx.fillStyle = color;
+            const s = size / 8;
+            const pattern = [
+                [0,1,1,0,0,1,1,0],
+                [1,1,1,1,1,1,1,1],
+                [1,1,1,1,1,1,1,1],
+                [1,1,1,1,1,1,1,1],
+                [0,1,1,1,1,1,1,0],
+                [0,0,1,1,1,1,0,0],
+                [0,0,0,1,1,0,0,0],
+                [0,0,0,0,0,0,0,0]
+            ];
+            for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+                if(pattern[r][c]) ctx.fillRect(cx+c*s, cy+r*s, s, s);
+            }
+        }
+
+        function drawPixelRose(cx, cy, size) {
+            const s = size / 8;
+            const pattern = [
+                [0,0,1,1,1,0,0,0],
+                [0,1,1,1,1,1,0,0],
+                [0,1,1,1,1,1,0,0],
+                [0,0,1,1,1,0,0,0],
+                [0,0,0,1,0,0,0,0],
+                [0,0,0,1,0,0,0,0],
+                [0,0,1,1,1,0,0,0],
+                [0,0,0,0,0,0,0,0]
+            ];
+            for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+                if(pattern[r][c]) {
+                    ctx.fillStyle = r < 4 ? '#ff4466' : '#3a8b3a';
+                    ctx.fillRect(cx+c*s, cy+r*s, s, s);
+                }
+            }
+        }
+
+        function render() {
+            ctx.fillStyle = '#1a0a0e';
+            ctx.fillRect(0, 0, 320, 320);
+
+            // Grid dots
+            ctx.fillStyle = '#2a0f14';
+            for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+                ctx.fillRect(c*TILE+14, r*TILE+14, 4, 4);
+            }
+
+            // Collectibles
+            collectibles.forEach(item => {
+                if(!item.collected) drawPixelRose(item.x*TILE+4, item.y*TILE+4, 24);
+            });
+
+            // Player
+            drawPixelHeart(player.x*TILE+4, player.y*TILE+2, 28, '#f4c2c2');
+        }
+
+        function move(dx, dy) {
+            // Bloquear movimiento si hay modales abiertos
+            if (!document.getElementById('modal').classList.contains('hidden') || 
+                !document.getElementById('final').classList.contains('hidden')) return;
+
+            const nx = player.x + dx, ny = player.y + dy;
+            if(nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+            player.x = nx; player.y = ny;
+
+            collectibles.forEach((item) => {
+                if(!item.collected && item.x === player.x && item.y === player.y) {
+                    item.collected = true;
+                    collected++;
+                    updateScore();
+                    if(item.hasText) {
+                        showFragment(item.text);
+                    } else {
+                        checkGameEnd();
+                    }
+                }
+            });
+            render();
+        }
+
+        function updateScore() {
+            const el = document.getElementById('score-display');
+            el.textContent = '♥ ' + collected + ' / ' + collectibles.length;
+        }
+
+        function showFragment(text) {
+            document.getElementById('modal-text').textContent = text;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        document.getElementById('modal-close').addEventListener('click', () => {
+            document.getElementById('modal').classList.add('hidden');
+            checkGameEnd();
+        });
+
+        function checkGameEnd() {
+            if(collected >= collectibles.length) {
+                setTimeout(() => document.getElementById('final').classList.remove('hidden'), 300);
+            }
+        }
+
+        document.getElementById('final').addEventListener('click', () => {
+            document.getElementById('final').classList.add('hidden');
+        });
+
+        document.addEventListener('keydown', e => {
+            if(['ArrowUp', 'w', 'W'].includes(e.key)) { e.preventDefault(); move(0,-1); }
+            else if(['ArrowDown', 's', 'S'].includes(e.key)) { e.preventDefault(); move(0,1); }
+            else if(['ArrowLeft', 'a', 'A'].includes(e.key)) { e.preventDefault(); move(-1,0); }
+            else if(['ArrowRight', 'd', 'D'].includes(e.key)) { e.preventDefault(); move(1,0); }
+        });
+
+        document.querySelectorAll('#dpad button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const d = btn.dataset.dir;
+                if(d==='up') move(0,-1);
+                else if(d==='down') move(0,1);
+                else if(d==='left') move(-1,0);
+                else if(d==='right') move(1,0);
+            });
+        });
+
+        // Ejecución inicial segura
+        window.onload = () => {
+            updateScore();
+            render();
+        };
+  </script>
+</body>
+</html>   
    <p id="score-display" class="text-base font-bold" style="color: rgb(244, 194, 194);">♥ 0 / 8</p>
   </main>
 
